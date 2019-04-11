@@ -16,6 +16,7 @@ package procfs
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -154,6 +155,46 @@ func (p Proc) Executable() (string, error) {
 	}
 
 	return exe, err
+}
+
+// Children returns all the child pids of the command.
+func (p Proc) Children() ([]int, error) {
+	tids, err := ioutil.ReadDir(p.path("task"))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]int, 0)
+	var buf strings.Builder
+
+	for _, tid := range tids {
+		c, err := os.Open(p.path("task", tid.Name(), "children"))
+		if err != nil {
+			continue
+		}
+		defer c.Close()
+
+		_, err = io.Copy(&buf, c)
+		if err != nil {
+			continue
+		}
+
+		buf.WriteByte(' ')
+	}
+
+	tokens := strings.Split(buf.String(), " ")
+	for _, tok := range tokens {
+		if tok == "" {
+			continue
+		}
+		i, err := strconv.Atoi(tok)
+		if err != nil {
+			continue
+		}
+		result = append(result, i)
+	}
+
+	return result, nil
 }
 
 // Cwd returns the absolute path to the current working directory of the process.
